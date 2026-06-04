@@ -4,7 +4,12 @@
 
 - 状态：脚本骨架已建立，等待 pilot 运行。
 - Python 环境：`esam3_312`。
-- 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b`。
+- 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b`。
+
+## IRGPT 推理状态
+
+- 官方 WheatCao/ICCV2025-IRGPT 仓库暂无稳定推理脚本。
+- 本版审计重点从 IRGPT 生成质量转为 prompt proposal 覆盖率、SAM3 候选 mask 质量和 Qwen 质检有效性。
 
 ## 需要记录的统计
 
@@ -12,9 +17,9 @@
 |---|---|---:|---|
 | Prompt bank | canonical 类别数 | 待填 | 待填 |
 | Prompt bank | prompt 总数 | 待填 | 待填 |
-| IRGPT proposal | 图像数 | 待填 | 待填 |
-| IRGPT proposal | candidate 数 | 待填 | 待填 |
-| IRGPT proposal | 空输出/乱码率 | 待填 | 待填 |
+| Prompt proposal | 图像数 | 待填 | 待填 |
+| Prompt proposal | candidate 数 | 待填 | 待填 |
+| 外部 proposal worker | 空输出/乱码率 | 不启用时填 0 | 默认不依赖 IRGPT 推理 |
 | SAM3 candidates | 候选 mask 数 | 待填 | 待填 |
 | SAM3 candidates | 非空 mask 比例 | 待填 | 待填 |
 | Qwen QC | JSON 解析成功率 | 待填 | 待填 |

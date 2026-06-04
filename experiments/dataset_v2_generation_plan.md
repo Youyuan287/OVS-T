@@ -5,8 +5,16 @@
 输出目录：
 
 ```text
-/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b
+/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b
 ```
+
+
+## IRGPT 状态修正
+
+- WheatCao/ICCV2025-IRGPT 当前主要发布 IR-TD 数据、json_sft 模板和测试工具，缺少官方稳定推理入口。
+- 第一版 Dataset V2 不再把 IRGPT 作为实际 proposal generator。
+- IRGPT/IR-TD 只用于参考红外任务模板、类别表达和长短语设计。
+- 真实伪标签生成主路径为：扩展 prompt bank -> SAM3 多提示候选 mask -> Qwen3-VL-8B 质检 -> 类别自适应 QC。
 
 ## 流程
 
@@ -20,7 +28,7 @@ conda run -n esam3_312 python scripts/01_build_prompt_bank.py \
 2. 生成 IRGPT proposal。若 IRGPT 入口暂未稳定，可先不传 `--irgpt_command`，脚本会生成低置信 fallback proposal，用于打通 SAM3/Qwen/manifest 流程。
 
 ```bash
-conda run -n esam3_312 python scripts/02_run_irgpt_proposals.py \
+conda run -n esam3_312 python scripts/02_build_prompt_proposals.py \
   --prompt_bank data/prompt_bank_ir_v2.json \
   --max_images 500
 ```
@@ -29,7 +37,7 @@ conda run -n esam3_312 python scripts/02_run_irgpt_proposals.py \
 
 ```bash
 conda run -n esam3_312 python scripts/03_run_sam3_multi_prompt.py \
-  --proposals /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b/irgpt_proposals.jsonl \
+  --proposals /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b/irgpt_proposals.jsonl \
   --prompt_bank data/prompt_bank_ir_v2.json \
   --dry_run
 ```
@@ -38,14 +46,14 @@ conda run -n esam3_312 python scripts/03_run_sam3_multi_prompt.py \
 
 ```bash
 conda run -n esam3_312 python scripts/04_build_qwen_qc_panels.py \
-  --candidates /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b/sam3_candidates.jsonl
+  --candidates /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b/sam3_candidates.jsonl
 ```
 
 5. 运行 Qwen3-VL-8B 质检。第一版推荐接入真实 `--qwen_command`；若只联调流程，可用 `--rule_fallback`。
 
 ```bash
 conda run -n esam3_312 python scripts/05_run_qwen8b_qc.py \
-  --tasks /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b/qwen_qc_tasks.jsonl \
+  --tasks /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b/qwen_qc_tasks.jsonl \
   --rule_fallback
 ```
 
@@ -53,16 +61,16 @@ conda run -n esam3_312 python scripts/05_run_qwen8b_qc.py \
 
 ```bash
 conda run -n esam3_312 python scripts/06_merge_filter_manifest.py \
-  --candidates /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b/sam3_candidates.jsonl \
-  --qwen /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b/qwen_qc_results.jsonl
+  --candidates /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b/sam3_candidates.jsonl \
+  --qwen /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b/qwen_qc_results.jsonl
 ```
 
 7. 生成存在性校准数据：
 
 ```bash
 conda run -n esam3_312 python scripts/07_make_exist_calib_v2.py \
-  --train_hq /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b/train_hq.jsonl \
-  --val_hq /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b/val_hq.jsonl
+  --train_hq /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b/train_hq.jsonl \
+  --val_hq /home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b/val_hq.jsonl
 ```
 
 ## Pilot 门禁
@@ -77,4 +85,4 @@ conda run -n esam3_312 python scripts/07_make_exist_calib_v2.py \
 
 - 若 pilot 中 Qwen 能明显过滤错误 mask，再扩到 5k-10k 样本。
 - 若 Qwen JSON 解析失败率高，先修 Qwen worker，不进入训练。
-- 若电力类仍接近 0，优先扩 prompt bank 和 IRGPT proposal，不继续训练。
+- 若电力类仍接近 0，优先扩 prompt bank、增加多尺度 SAM3 生成策略和类别规则，不继续训练。
