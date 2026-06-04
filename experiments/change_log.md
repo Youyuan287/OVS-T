@@ -11,6 +11,18 @@
 
 ## 2026-06-04
 
+### 待提交 - ix-sam3-pilot-mask-shape
+
+- 目的：修复 SAM3-only pilot 中候选 mask 保存失败的问题。
+- 主要改动：
+  - 更新 scripts/03_run_sam3_multi_prompt.py，对 SAM3 返回的 [1,1,H,W] 或类似维度进行 squeeze。
+  - 若 squeeze 后仍不是二维 mask，则显式报错，避免写出错误伪标签。
+- 验证：
+  - py_compile 通过。
+  - --help 通过。
+- 后续：重跑 3 张图小规模 SAM3-only pilot。
+
+
 ### 待提交 - support-submission-ckpt-for-sam3-pilot
 
 - 目的：让 Dataset V2 SAM3-only pilot 可以直接使用当前提交包组合权重 submit_epoch4_best/model/sam3.pt。

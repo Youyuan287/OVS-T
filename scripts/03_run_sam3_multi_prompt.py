@@ -205,8 +205,12 @@ def predict_mask(torch, v2, model, processor, device: str, image: Image.Image, p
     scores = state.get("scores")
     if masks is None:
         return np.zeros((image.height, image.width), dtype=np.uint8), 0.0
-    mask = masks[0] if getattr(masks, "ndim", 0) == 3 else masks
-    mask_np = mask.detach().cpu().float().numpy()
+    mask_np = masks.detach().cpu().float().numpy()
+    mask_np = np.squeeze(mask_np)
+    if mask_np.ndim == 3:
+        mask_np = mask_np[0]
+    if mask_np.ndim != 2:
+        raise RuntimeError(f"Unexpected SAM3 mask shape after squeeze: {mask_np.shape}")
     score = float(scores[0].detach().cpu().item()) if scores is not None and len(scores) else 0.0
     return (mask_np > threshold).astype(np.uint8), score
 
