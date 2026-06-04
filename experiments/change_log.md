@@ -11,6 +11,16 @@
 
 ## 2026-06-04
 
+### 待提交 - handle-empty-sam3-pilot-candidates
+
+- 目的：处理 SAM3 多提示 pilot 中部分 prompt 返回空候选维度的问题。
+- 主要改动：
+  - 更新 scripts/03_run_sam3_multi_prompt.py，当 SAM3 mask tensor 任一维度为 0 或 squeeze 后为空时，输出空 mask 并继续处理后续 prompt。
+- 验证：
+  - py_compile 通过。
+- 后续：继续重跑 SAM3-only pilot。
+
+
 ### 待提交 - ix-sam3-pilot-mask-shape
 
 - 目的：修复 SAM3-only pilot 中候选 mask 保存失败的问题。

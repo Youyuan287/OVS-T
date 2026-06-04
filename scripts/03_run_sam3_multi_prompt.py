@@ -206,7 +206,11 @@ def predict_mask(torch, v2, model, processor, device: str, image: Image.Image, p
     if masks is None:
         return np.zeros((image.height, image.width), dtype=np.uint8), 0.0
     mask_np = masks.detach().cpu().float().numpy()
+    if 0 in mask_np.shape:
+        return np.zeros((image.height, image.width), dtype=np.uint8), 0.0
     mask_np = np.squeeze(mask_np)
+    if mask_np.size == 0:
+        return np.zeros((image.height, image.width), dtype=np.uint8), 0.0
     if mask_np.ndim == 3:
         mask_np = mask_np[0]
     if mask_np.ndim != 2:
