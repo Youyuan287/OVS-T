@@ -11,6 +11,20 @@
 
 ## 2026-06-04
 
+### 待提交 - 
+ecord-sam3-only-pilot-results
+
+- 目的：记录扩展词表 SAM3-only 小规模 pilot 的实际输出结果。
+- 主要内容：
+  - 使用 submit_epoch4_best/model/sam3.pt 对 3 张图、18 条 proposal、72 个 text-only 候选进行 mask 生成。
+  - 生成 72 个 Qwen 四宫格质检面板。
+  - 在 experiments/dataset_v2_audit.md 中记录类别非空数和初步结论。
+- 验证：
+  - SAM3 pilot 成功完成，28/72 候选非空。
+  - Qwen 面板生成成功，任务文件路径：/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b_pilot_current/qwen_qc_tasks.jsonl。
+- 后续：针对电力类和小目标改为场景定向采样。
+
+
 ### 待提交 - handle-empty-sam3-pilot-candidates
 
 - 目的：处理 SAM3 多提示 pilot 中部分 prompt 返回空候选维度的问题。
