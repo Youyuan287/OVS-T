@@ -65,3 +65,16 @@
 
 结论：扩展词表 + SAM3 text-only 链路可运行，车辆/道路/建筑类已有非空候选；电力类和小目标需要改为场景定向采样，不能只靠随机 3 张图判断。下一步建议抽取包含杆塔/输电线/巡检场景的图像子集，再跑 power line/pole/insulator 专项 pilot。
 
+
+## 目标采样处理策略
+
+针对随机 SAM3-only pilot 中电力类和小目标大量为空的问题，下一步不再随机抽图，而是从旧伪标签 pseudo_lora_b1_step300/masks_union 中挖掘曾经出现 pole/insulator/person/vehicle/car 的图像作为专项 pilot 种子。
+
+已新增 scripts/08_select_targeted_pilot_images.py，当前 dry-run 结果：
+
+- 候选图像：5049 张。
+- 选中图像：30 张。
+- 选中类别计数：pole=30、ehicle=29、car=27、person=26、insulator=4。
+- 输出图片列表：/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_targeted_sampling/targeted_images.txt。
+
+下一步使用该 image list 生成 pole/power line/insulator/person/vehicle/car 专项 prompt proposal，并用更低候选阈值跑 SAM3 text-only pilot。

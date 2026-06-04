@@ -11,6 +11,19 @@
 
 ## 2026-06-04
 
+### 待提交 - dd-targeted-pilot-image-selection
+
+- 目的：解决随机 SAM3 pilot 对电力类和小目标没有诊断意义的问题。
+- 主要改动：
+  - 更新 scripts/02_build_prompt_proposals.py，支持 --image_list 和 --include_classes。
+  - 新增 scripts/08_select_targeted_pilot_images.py，从旧伪标签命中中筛选专项 pilot 图片。
+  - 更新 experiments/dataset_v2_audit.md，记录目标采样策略和首轮统计。
+- 验证：
+  - py_compile 通过。
+  - 目标采样 dry-run 选出 30 张图，候选图像总数 5049。
+- 后续：使用目标采样列表跑电力/小目标专项 SAM3 pilot。
+
+
 ### 待提交 - 
 ecord-sam3-only-pilot-results
 

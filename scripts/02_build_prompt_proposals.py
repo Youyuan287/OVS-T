@@ -33,6 +33,29 @@ def iter_images(root: Path) -> Iterable[Path]:
             yield p
 
 
+def load_image_list(path: Path) -> List[Path]:
+    images = []
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                images.append(Path(line))
+    return images
+
+
+def filter_classes(classes: List[Dict[str, Any]], include_classes: str) -> List[Dict[str, Any]]:
+    if not include_classes:
+        return classes
+    wanted = {x.strip().lower() for x in include_classes.split(",") if x.strip()}
+    out = []
+    for item in classes:
+        canonical = str(item.get("maps_to", item["canonical"])).lower()
+        raw = str(item["canonical"]).lower()
+        if canonical in wanted or raw in wanted:
+            out.append(item)
+    return out
+
+
 def parse_boxes(text: str) -> List[List[float]]:
     boxes = []
     pattern = r"\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]"
@@ -119,6 +142,8 @@ def main() -> int:
     parser.add_argument("--prompt_bank", default="data/prompt_bank_ir_v2.json")
     parser.add_argument("--out_jsonl", default="/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b/prompt_proposals.jsonl")
     parser.add_argument("--summary", default="")
+    parser.add_argument("--image_list", default="", help="Optional newline-separated absolute image paths.")
+    parser.add_argument("--include_classes", default="", help="Comma-separated canonical classes to emit.")
     parser.add_argument("--max_images", type=int, default=500)
     parser.add_argument("--seed", type=int, default=33)
     parser.add_argument("--fallback_classes", type=int, default=12)
@@ -128,8 +153,11 @@ def main() -> int:
 
     random.seed(args.seed)
     prompt_bank_path = Path(args.prompt_bank)
-    classes = load_prompt_bank(prompt_bank_path)
-    images = list(iter_images(Path(args.image_root)))
+    classes = filter_classes(load_prompt_bank(prompt_bank_path), args.include_classes)
+    if args.image_list:
+        images = load_image_list(Path(args.image_list))
+    else:
+        images = list(iter_images(Path(args.image_root)))
     random.shuffle(images)
     if args.max_images > 0:
         images = images[: args.max_images]
