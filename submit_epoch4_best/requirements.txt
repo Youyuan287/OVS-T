@@ -1,0 +1,7 @@
+timm
+einops
+iopath
+ftfy
+regex
+omegaconf
+hydra-core
