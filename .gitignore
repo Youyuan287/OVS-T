@@ -171,3 +171,7 @@ sam3/assets/**
 
 # Generated/copy-only submission package tree; track only selected entry files
 submit_epoch4_best/sam3/
+
+# Pre-submit QC generated reports
+experiments/pre_submit_qc/
+experiments/pre_submit_qc_runs/

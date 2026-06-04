@@ -1,15 +1,27 @@
-# Online Submission Log
+# 线上提交日志
 
-Current best score: 61
+当前最好分数：61
 
-| Date | Slot | Branch | Commit | Tag | Main variable changed | Package / weight path | Local gate result | Online score | Decision | Notes |
+| 日期 | 槽位 | 分支 | Commit | Tag | 主变量 | 提交包/权重路径 | 本地门禁结果 | 线上分数 | 决策 | 备注 |
 |---|---|---|---|---|---|---|---|---:|---|---|
-| 2026-06-04 | baseline | main | pending | none | Current known online baseline | TBD | TBD | 61 | keep | Starting point for future experiments. |
+| 2026-06-04 | baseline | main | 待补 | 无 | 当前已知线上基线 | `submit_epoch4_best/model/sam3.pt` | 待补 | 61 | 保留 | 后续所有版本必须与该分数比较。 |
+| 2026-06-04 | S1 | main | 待填 | `submit-20260604-S1` | `EXIST_THRESHOLD=0.45`，`SELECT_MODE=top1` | 待填 | 待填 | 待填 | 待填 | 优先验证漏检问题。 |
+| 2026-06-04 | S2 | main | 待填 | `submit-20260604-S2` | `EXIST_THRESHOLD=0.35`，`SELECT_MODE=top1` | 待填 | 待填 | 待填 | 待填 | 判断低存在性样本是否值得保留。 |
+| 2026-06-04 | S3 | main | 待填 | `submit-20260604-S3` | `EXIST_THRESHOLD=0.45` + 面积异常保护 | 待填 | 待填 | 待填 | 待填 | 目标是抑制大面积误检。 |
+| 2026-06-04 | S4 | main | 待填 | `submit-20260604-S4` | `EXIST_THRESHOLD=0.45` + `SELECT_MODE=train_like` 小 `top-k` 并集 | 待填 | 待填 | 待填 | 待填 | 测试多实例语义召回。 |
 
-## Rules
+## 记录规则
 
-- Use only  to  per day.
-- Change one primary variable per submission.
-- Record the exact package path before upload.
-- Fill in the online score immediately after the platform returns it.
-- Do not continue from a version that scores below the current best unless there is a clear diagnostic reason.
+- 每天只使用 `S1` 到 `S4` 四个槽位。
+- 每次线上提交只改变一个主变量。
+- 上传前必须记录 commit、tag、提交包路径、权重路径和环境变量。
+- 平台返回结果后立即填写线上分数和结论。
+- 低于当前最好分数的版本只做诊断归档，不继续叠加。
+- 权重、数据集、提交压缩包不进入 Git；只记录服务器路径、大小、生成脚本和对应 commit。
+
+## 推荐 tag 备注格式
+
+```bash
+git tag -a submit-20260604-S1 -m "线上提交 S1：EXIST_THRESHOLD=0.45；提交包=/path/to/package；线上分数待补"
+git push origin submit-20260604-S1
+```

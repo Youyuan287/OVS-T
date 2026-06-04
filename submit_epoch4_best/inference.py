@@ -54,6 +54,22 @@ TOPK = int(os.environ.get("TOPK", "20"))
 # Prompt normalization is useful if the model was trained mainly on canonical English category words.
 USE_PROMPT_NORMALIZE = os.environ.get("PROMPT_NORMALIZE", "1") == "1"
 
+# Optional mask post-processing. Defaults are conservative/off so each online
+# submission can test one main variable through environment variables.
+POSTPROCESS_MASKS = os.environ.get("POSTPROCESS_MASKS", "0") == "1"
+FILL_HOLES = os.environ.get("FILL_HOLES", "0") == "1"
+FILTER_COMPONENTS = os.environ.get("FILTER_COMPONENTS", "0") == "1"
+AREA_FILTER = os.environ.get("AREA_FILTER", "0") == "1"
+MIN_AREA_RATIO = float(os.environ.get("MIN_AREA_RATIO", "0.0"))
+MAX_AREA_RATIO = float(os.environ.get("MAX_AREA_RATIO", "0.95"))
+MAX_AREA_RATIO_OBJECT = float(os.environ.get("MAX_AREA_RATIO_OBJECT", "0.70"))
+MIN_COMPONENT_AREA = int(os.environ.get("MIN_COMPONENT_AREA", "0"))
+MIN_COMPONENT_AREA_RATIO = float(os.environ.get("MIN_COMPONENT_AREA_RATIO", "0.0"))
+SMALL_TARGET_AREA_RATIO = float(os.environ.get("SMALL_TARGET_AREA_RATIO", "0.0008"))
+KEEP_SMALL_TARGETS = os.environ.get("KEEP_SMALL_TARGETS", "1") == "1"
+
+LARGE_AREA_PROMPTS = {"road", "building", "tree", "power line"}
+
 
 try:
     from pycocotools import mask as mask_utils
@@ -190,6 +206,27 @@ ALIAS_MAP = {
     "bear": "animal",
     "dog": "animal",
 
+    # Infrared / power inspection aliases
+    "hot insulator": "insulator",
+    "overheated insulator": "insulator",
+    "abnormal insulator": "insulator",
+    "ceramic insulator": "insulator",
+    "composite insulator": "insulator",
+    "transmission line": "power line",
+    "power transmission line": "power line",
+    "overhead line": "power line",
+    "high voltage line": "power line",
+    "electric wire": "power line",
+    "security camera person": "person",
+    "hidden person": "person",
+    "pedestrian target": "person",
+    "small vehicle": "vehicle",
+    "parked car": "car",
+    "thermal vehicle": "vehicle",
+    "hot vehicle": "vehicle",
+    "utility tower": "pole",
+    "transmission pole": "pole",
+
     # Chinese aliases
     "人": "person",
     "行人": "person",
@@ -240,9 +277,19 @@ PHRASE_RULES = [
     ("tower", "pole"),
     ("pole", "pole"),
 
+    ("hot insulator", "insulator"),
+    ("overheated insulator", "insulator"),
+    ("abnormal insulator", "insulator"),
+    ("ceramic insulator", "insulator"),
+    ("composite insulator", "insulator"),
     ("insulator", "insulator"),
     ("transformer", "transformer"),
 
+    ("power transmission line", "power line"),
+    ("transmission line", "power line"),
+    ("overhead line", "power line"),
+    ("high voltage line", "power line"),
+    ("electric wire", "power line"),
     ("power line", "power line"),
     ("wire", "power line"),
     ("cable", "power line"),
@@ -455,6 +502,120 @@ def empty_mask(image_size):
     return np.zeros((img_h, img_w), dtype=np.uint8)
 
 
+def _connected_components(mask: np.ndarray):
+    h, w = mask.shape
+    visited = np.zeros_like(mask, dtype=bool)
+    components = []
+
+    for y in range(h):
+        for x in range(w):
+            if mask[y, x] == 0 or visited[y, x]:
+                continue
+
+            stack = [(y, x)]
+            visited[y, x] = True
+            pixels = []
+
+            while stack:
+                cy, cx = stack.pop()
+                pixels.append((cy, cx))
+
+                for ny in (cy - 1, cy, cy + 1):
+                    for nx in (cx - 1, cx, cx + 1):
+                        if ny == cy and nx == cx:
+                            continue
+                        if ny < 0 or ny >= h or nx < 0 or nx >= w:
+                            continue
+                        if visited[ny, nx] or mask[ny, nx] == 0:
+                            continue
+                        visited[ny, nx] = True
+                        stack.append((ny, nx))
+
+            components.append(pixels)
+
+    return components
+
+
+def fill_binary_holes(mask: np.ndarray):
+    h, w = mask.shape
+    background = mask == 0
+    visited = np.zeros_like(background, dtype=bool)
+    stack = []
+
+    for x in range(w):
+        if background[0, x]:
+            stack.append((0, x))
+            visited[0, x] = True
+        if background[h - 1, x] and not visited[h - 1, x]:
+            stack.append((h - 1, x))
+            visited[h - 1, x] = True
+
+    for y in range(h):
+        if background[y, 0] and not visited[y, 0]:
+            stack.append((y, 0))
+            visited[y, 0] = True
+        if background[y, w - 1] and not visited[y, w - 1]:
+            stack.append((y, w - 1))
+            visited[y, w - 1] = True
+
+    while stack:
+        cy, cx = stack.pop()
+        for ny, nx in ((cy - 1, cx), (cy + 1, cx), (cy, cx - 1), (cy, cx + 1)):
+            if ny < 0 or ny >= h or nx < 0 or nx >= w:
+                continue
+            if visited[ny, nx] or not background[ny, nx]:
+                continue
+            visited[ny, nx] = True
+            stack.append((ny, nx))
+
+    holes = background & (~visited)
+    if holes.any():
+        mask = mask.copy()
+        mask[holes] = 1
+
+    return mask
+
+
+def postprocess_mask(mask: np.ndarray, prompt: str):
+    info = {
+        "postprocess_applied": bool(POSTPROCESS_MASKS),
+        "area_rejected": False,
+        "components_removed": 0,
+    }
+
+    if mask.sum() == 0:
+        return mask, info
+
+    h, w = mask.shape
+    total_pixels = max(1, h * w)
+
+    if POSTPROCESS_MASKS and FILL_HOLES:
+        mask = fill_binary_holes(mask)
+
+    if POSTPROCESS_MASKS and FILTER_COMPONENTS and (MIN_COMPONENT_AREA > 0 or MIN_COMPONENT_AREA_RATIO > 0):
+        area = int(mask.sum())
+        if not (KEEP_SMALL_TARGETS and area / total_pixels <= SMALL_TARGET_AREA_RATIO):
+            min_area = max(MIN_COMPONENT_AREA, int(total_pixels * MIN_COMPONENT_AREA_RATIO))
+            if min_area > 0:
+                keep = np.zeros_like(mask, dtype=np.uint8)
+                for comp in _connected_components(mask):
+                    if len(comp) >= min_area:
+                        ys, xs = zip(*comp)
+                        keep[np.array(ys), np.array(xs)] = 1
+                    else:
+                        info["components_removed"] += 1
+                mask = keep
+
+    if AREA_FILTER:
+        area_ratio = float(mask.sum() / total_pixels)
+        max_ratio = MAX_AREA_RATIO if prompt in LARGE_AREA_PROMPTS else MAX_AREA_RATIO_OBJECT
+        if area_ratio < MIN_AREA_RATIO or area_ratio > max_ratio:
+            info["area_rejected"] = True
+            return np.zeros_like(mask, dtype=np.uint8), info
+
+    return mask.astype(np.uint8), info
+
+
 def predict_one_prompt(
     model,
     tiny,
@@ -542,15 +703,23 @@ def predict_one_prompt(
         union = bin_masks.any(dim=0).squeeze(0)
 
         mask = union.detach().cpu().numpy().astype(np.uint8)
+        mask, post_info = postprocess_mask(mask, prompt)
         area_ratio = float(mask.sum() / max(1, img_h * img_w))
+
+        reason = "ok"
+        if post_info.get("area_rejected"):
+            reason = "area_rejected"
+        elif post_info.get("components_removed", 0) > 0 and mask.sum() == 0:
+            reason = "postprocess_empty"
 
         return mask, {
             "exists": bool(mask.sum() > 0),
-            "reason": "ok",
+            "reason": reason,
             "max_score": max_score,
             "presence": presence_score,
             "exist_score": exist_score,
             "area_ratio": area_ratio,
+            **post_info,
         }
 
 
@@ -603,7 +772,9 @@ def run():
     print(
         f"[Start] device={device}, tasks={len(tasks)}, images={len(grouped)}, "
         f"resolution={RESOLUTION}, exist_thr={EXIST_THRESHOLD}, mask_thr={MASK_THRESHOLD}, "
-        f"select_mode={SELECT_MODE}, prompt_normalize={USE_PROMPT_NORMALIZE}",
+        f"select_mode={SELECT_MODE}, prompt_normalize={USE_PROMPT_NORMALIZE}, "
+        f"postprocess={POSTPROCESS_MASKS}, area_filter={AREA_FILTER}, "
+        f"fill_holes={FILL_HOLES}, filter_components={FILTER_COMPONENTS}",
         flush=True,
     )
 
@@ -624,6 +795,8 @@ def run():
         "num_positive": 0,
         "num_black": 0,
         "num_low_exist_score": 0,
+        "num_area_rejected": 0,
+        "num_postprocess_empty": 0,
         "max_score_sum": 0.0,
         "presence_sum": 0.0,
         "exist_score_sum": 0.0,
@@ -669,6 +842,10 @@ def run():
                 stats["num_black"] += 1
                 if info["reason"] == "low_exist_score":
                     stats["num_low_exist_score"] += 1
+                elif info["reason"] == "area_rejected":
+                    stats["num_area_rejected"] += 1
+                elif info["reason"] == "postprocess_empty":
+                    stats["num_postprocess_empty"] += 1
 
             predictions_by_order[item["order"]] = {
                 "ann_id": item["ann_id"],
