@@ -9,6 +9,7 @@ import json
 import math
 import os
 import sys
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -106,6 +107,39 @@ def save_overlay(image: Image.Image, mask: np.ndarray, path: Path) -> None:
     Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).save(path)
 
 
+def split_submission_weight(raw, tiny_fallback_path: str = ""):
+    if not isinstance(raw, (dict, OrderedDict)):
+        raise TypeError(f"Unsupported weight type: {type(raw)}")
+
+    if "esam3_model" in raw and "tiny_text" in raw:
+        return OrderedDict(raw["esam3_model"]), OrderedDict(raw["tiny_text"])
+
+    keys = [str(k) for k in raw.keys()]
+    if any(k.startswith("esam3_model.") for k in keys) and any(k.startswith("tiny_text.") for k in keys):
+        esam3_sd = OrderedDict()
+        tiny_sd = OrderedDict()
+        for k, v in raw.items():
+            k = str(k)
+            if k.startswith("esam3_model."):
+                esam3_sd[k.replace("esam3_model.", "", 1)] = v
+            elif k.startswith("tiny_text."):
+                tiny_sd[k.replace("tiny_text.", "", 1)] = v
+        return esam3_sd, tiny_sd
+
+    if tiny_fallback_path:
+        import torch
+
+        tiny_raw = torch.load(tiny_fallback_path, map_location="cpu")
+        if isinstance(tiny_raw, dict) and "model" in tiny_raw:
+            tiny_raw = tiny_raw["model"]
+        return OrderedDict(raw), OrderedDict(tiny_raw)
+
+    raise ValueError(
+        "Cannot split checkpoint. Use --submission_ckpt for prefixed combined "
+        "weights, or provide --esam3_ckpt and --tiny_ckpt."
+    )
+
+
 def build_model(args):
     import torch
     from torchvision.transforms import v2
@@ -123,8 +157,6 @@ def build_model(args):
         model_name="b1",
         text_encoder_type="MobileCLIP-S1",
     )
-    sd = torch.load(args.esam3_ckpt, map_location=device)
-    model.load_state_dict(sd, strict=False)
     tiny = TinyTextEncoderESAM3(
         bpe_path=args.bpe_path,
         token_dim=192,
@@ -132,8 +164,27 @@ def build_model(args):
         num_layers=3,
         num_heads=6,
     ).to(device)
-    tiny_ckpt = torch.load(args.tiny_ckpt, map_location=device)
-    tiny.load_state_dict(tiny_ckpt["model"] if isinstance(tiny_ckpt, dict) and "model" in tiny_ckpt else tiny_ckpt, strict=True)
+
+    if args.submission_ckpt:
+        raw = torch.load(args.submission_ckpt, map_location="cpu")
+        esam3_sd, tiny_sd = split_submission_weight(raw)
+    else:
+        raw = torch.load(args.esam3_ckpt, map_location="cpu")
+        esam3_sd, tiny_sd = split_submission_weight(raw, args.tiny_ckpt)
+
+    missing, unexpected = model.load_state_dict(esam3_sd, strict=False)
+    bad_missing = [x for x in missing if "language_backbone" not in x]
+    if bad_missing:
+        raise RuntimeError(f"ESAM3 weight mismatch, bad missing examples: {bad_missing[:20]}")
+    if unexpected:
+        print(f"[Load] ESAM3 unexpected examples: {unexpected[:20]}", flush=True)
+
+    tiny_missing, tiny_unexpected = tiny.load_state_dict(tiny_sd, strict=False)
+    if tiny_missing or tiny_unexpected:
+        raise RuntimeError(
+            f"TinyText mismatch: missing={tiny_missing[:20]}, "
+            f"unexpected={tiny_unexpected[:20]}"
+        )
     try:
         model.backbone.language_backbone = None
     except Exception:
@@ -165,6 +216,7 @@ def main() -> int:
     parser.add_argument("--proposals", required=True)
     parser.add_argument("--prompt_bank", default="data/prompt_bank_ir_v2.json")
     parser.add_argument("--out_dir", default="/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_irgpt_sam3_qwen8b")
+    parser.add_argument("--submission_ckpt", default="", help="Combined submission checkpoint with esam3_model./tiny_text. prefixes.")
     parser.add_argument("--esam3_ckpt", default="")
     parser.add_argument("--tiny_ckpt", default="")
     parser.add_argument("--bpe_path", default="sam3/assets/bpe_simple_vocab_16e6.txt.gz")
@@ -191,8 +243,11 @@ def main() -> int:
 
     model_bundle = None
     if not args.dry_run:
-        if not args.esam3_ckpt or not args.tiny_ckpt:
-            raise ValueError("--esam3_ckpt and --tiny_ckpt are required unless --dry_run is used")
+        if not args.submission_ckpt and (not args.esam3_ckpt or not args.tiny_ckpt):
+            raise ValueError(
+                "Use --submission_ckpt, or provide --esam3_ckpt and --tiny_ckpt, "
+                "unless --dry_run is used"
+            )
         sys.path.insert(0, str(Path.cwd()))
         model_bundle = build_model(args)
 

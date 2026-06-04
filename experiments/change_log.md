@@ -11,6 +11,19 @@
 
 ## 2026-06-04
 
+### 待提交 - support-submission-ckpt-for-sam3-pilot
+
+- 目的：让 Dataset V2 SAM3-only pilot 可以直接使用当前提交包组合权重 submit_epoch4_best/model/sam3.pt。
+- 主要改动：
+  - 更新 scripts/03_run_sam3_multi_prompt.py，新增 --submission_ckpt 参数。
+  - 支持 esam3_model. 和 	iny_text. 前缀的组合权重拆分。
+  - 保留原有 --esam3_ckpt + --tiny_ckpt 分离权重模式。
+- 验证：
+  - py_compile 通过。
+  - --help 通过。
+- 后续：使用扩展词表先跑小规模 SAM3 mask 生成和 Qwen 面板，不进入训练。
+
+
 ### `7758b5f` - `adjust-dataset-v2-for-no-irgpt-inference`
 
 - 目的：修正 Dataset V2 路线，不再依赖 `WheatCao/ICCV2025-IRGPT` 官方仓库直接推理。
