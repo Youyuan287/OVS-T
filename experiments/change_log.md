@@ -11,6 +11,25 @@
 
 ## 2026-06-05
 
+### 待提交 - record-data1-random10-pilot
+
+- 目的：对比 data3 电力场景表现，随机抽取 data1 城市场景 10 张图复跑 SAM3 + Qwen3-VL 小样本实验。
+- 实验设置：
+  - 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data1_random10_pilot_current`。
+  - 场景：`data1`，`scene_type=urban_scene`。
+  - 采样：随机 10 张，不使用旧伪标签命中优先。
+  - 类别：prompt bank 中 12 类。
+  - SAM3：`threshold=0.35`，`resolution=768`，`modes=text_only`，`prompts_per_class=4`。
+  - Qwen：本地 `Qwen3-VL-8B-Instruct`，真实质检，0 rule fallback。
+- 结果：
+  - data1 总图像数 35000，本轮选中 10 张。
+  - Prompt proposal：120 条。
+  - SAM3 candidates：480 个，145 个非空。
+  - Qwen QC：480 个 task，477 条成功输出，0 fallback。
+  - Manifest：`kept_total=61`，`train_hq=53`，`val_hq=8`。
+  - 保留类别：road=20、building=10、car=10、tree=9、vehicle=8、person=3、pole=1。
+- 结论：data1 随机城市场景明显优于 data3 电力场景，说明流水线可用；data3 的核心瓶颈是电力细目标的 SAM3 候选生成不足。
+
 ### 待提交 - add-data3-power-qwen-pilot
 
 - 目的：实现并验证 data3 电力场景小数据集 pilot，按一级文件夹名记录场景，并接入真实 Qwen3-VL-8B 质检。

@@ -146,3 +146,77 @@
 - 当前瓶颈主要是 SAM3 text-only 对电力细目标候选不足：`insulator` 全空，`power line` 仅 2 个非空，`pole` 有 19 个非空但未通过最终高置信过滤。
 - Qwen3-VL 对电力类别语义并不完全失败，`insulator/pole/power line` 有较多 accept/review；但空 mask 和低最终融合分阻止其进入 `train_hq`。
 - 下一步不建议直接训练。建议优先尝试电力类专用 proposal：更强图像定位提示、box/point proposal、降低 SAM3 候选阈值消融，或从 data3 之外扩展更多电力场景样本。
+
+## 2026-06-05 data1 城市场景随机 10 张 SAM3 + Qwen3-VL Pilot
+
+- 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data1_random10_pilot_current`
+- 场景目录：`data1`
+- 场景标注：`urban_scene`
+- 采样方式：随机抽取，不使用旧伪标签命中优先。
+- data1 总图像数：`35000`
+- 本轮图像数：`10`
+- SAM3 设置同 data3 pilot：`threshold=0.35`，`resolution=768`，`modes=text_only`，`prompts_per_class=4`
+- Qwen 模型：`/home/Groups/group2/.cache/modelscope/hub/models/Qwen/Qwen3-VL-8B-Instruct`
+
+| 阶段 | 指标 | 结果 | 结论 |
+|---|---:|---:|---|
+| Scene sampling | data1 总图像数 | 35000 | 城市场景规模远大于 data3。 |
+| Scene sampling | 随机选中图像 | 10 | 只做小样本诊断。 |
+| Prompt proposal | candidate 数 | 120 | 12 类 fallback proposal。 |
+| SAM3 candidates | 候选 mask 数 | 480 | 每条 proposal 约 4 个 text prompt。 |
+| SAM3 candidates | 非空 mask 数 | 145 | 非空率约 30.21%，明显高于 data3。 |
+| Qwen QC | task 数 | 480 | 全量 panel 质检。 |
+| Qwen QC | 成功输出 | 477 | 真实 Qwen 成功，无 rule fallback。 |
+| Manifest | kept_total | 61 | 过滤后可得到可训练样本。 |
+| Manifest | train_hq / val_hq | 53 / 8 | 小样本拆分正常。 |
+
+### SAM3 非空统计
+
+| 类别 | proposal 数 | candidate 数 | 非空数 | 非空平均面积比例 |
+|---|---:|---:|---:|---:|
+| animal | 10 | 40 | 0 | 0 |
+| building | 10 | 40 | 20 | 0.184284 |
+| car | 10 | 40 | 24 | 0.011524 |
+| insulator | 10 | 40 | 0 | 0 |
+| person | 10 | 40 | 7 | 0.002613 |
+| pole | 10 | 40 | 10 | 0.002723 |
+| power line | 20 | 80 | 0 | 0 |
+| road | 10 | 40 | 32 | 0.202917 |
+| tree | 10 | 40 | 24 | 0.127459 |
+| truck | 10 | 40 | 12 | 0.009458 |
+| vehicle | 10 | 40 | 16 | 0.013122 |
+
+### Qwen3-VL 决策统计
+
+| 类别 | QC 数 | accept | review | drop | 平均 semantic_match |
+|---|---:|---:|---:|---:|---:|
+| animal | 40 | 0 | 0 | 40 | 0.0000 |
+| building | 39 | 6 | 17 | 16 | 0.5397 |
+| car | 39 | 4 | 17 | 18 | 0.4795 |
+| insulator | 40 | 0 | 0 | 40 | 0.0000 |
+| person | 40 | 8 | 12 | 20 | 0.4500 |
+| pole | 40 | 1 | 10 | 29 | 0.2275 |
+| power line | 80 | 0 | 8 | 72 | 0.0800 |
+| road | 40 | 3 | 30 | 7 | 0.7288 |
+| tree | 40 | 2 | 28 | 10 | 0.6388 |
+| truck | 40 | 0 | 3 | 37 | 0.0600 |
+| vehicle | 39 | 2 | 18 | 19 | 0.4564 |
+
+### Manifest 结果
+
+| 类别 | 保留数 |
+|---|---:|
+| road | 20 |
+| building | 10 |
+| car | 10 |
+| tree | 9 |
+| vehicle | 8 |
+| person | 3 |
+| pole | 1 |
+
+### 结论
+
+- data1 随机 10 张的 SAM3 表现明显优于 data3 电力场景：非空率约 `30.21%`，最终保留 `61` 条高置信样本。
+- 可扩量类别主要是 `road/building/car/tree/vehicle`，`person` 有少量小目标可用，`pole` 极少。
+- `power line/insulator/animal` 在 data1 随机样本中仍然不可用，符合场景缺失或 text-only 难召回的预期。
+- 与 data3 对比说明：当前流程本身可跑通且 Qwen 质检有效，data3 失败更像是电力细目标的 SAM3 proposal/分割瓶颈，而不是整条流水线失效。
