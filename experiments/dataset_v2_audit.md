@@ -6,6 +6,27 @@
 - Python 环境：`esam3_312`。
 - 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_prompt_sam3_qwen8b`。
 
+## 2026-06-06 data1 去重批量造数链路
+
+- 目标：对 `data1` 先去重并选择 5000 张代表图，再执行 SAM3 text-only 候选生成、非空候选预过滤、Qwen3-VL 质检和高置信 manifest 合并。
+- 新增脚本：`scripts/10_dedupe_select_data1.py`、`scripts/11_filter_sam3_nonempty_candidates.py`、`scripts/12_run_data1_dedup_sam3_qwen.sh`。
+- Manifest 合并更新：`scripts/06_merge_filter_manifest.py` 支持 `--dedup_groups`，train/val 按去重组切分，避免重复帧或近重复帧跨集合泄漏。
+- 默认数据路径：`/home/Groups/group2/Working/TJY/sam3_ir_test/data/ir_images/data1`
+- 默认输出路径：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data1_dedup5000_sam3_qwen_current`
+- 正式运行前建议先用小样本 smoke：`MAX_SCAN=50 MAX_IMAGES=50 SAM3_MAX_ITEMS=20 QWEN_MAX_ITEMS=20 OUT=/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data1_dedup50_smoke bash scripts/12_run_data1_dedup_sam3_qwen.sh`
+- 预期：`road/building/car/vehicle/tree/person/pole` 是主要可用类别；`insulator/power line/animal` 不强求保留数量，只记录召回和质检表现。
+
+### data1 dedup20 smoke 结果
+
+- 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data1_dedup20_smoke_20260606`
+- 去重：扫描 50 张，质量过滤 0，近重复/完全重复成员 19，去重组 31，选择 20 张。
+- Proposal：20 张图，240 条 fallback proposal，覆盖 prompt bank 全部 12 类。
+- SAM3：前 20 条 proposal 生成 80 个候选，45 个非空。
+- 预过滤：输入 80，保留 38，丢弃 35 个空 mask，按 IoU 丢弃 7 个重复 mask。
+- Qwen3-VL：真实质检 20 条，成功 20，fallback 0，parse_failed 0。
+- Manifest：`kept_total=5`，`train=4`，`val=1`，类别为 `building=1`、`road=1`、`tree=3`，均为 B 级软标签；train/val 去重组无交叉。
+- 说明：本 smoke 限制 `QWEN_MAX_ITEMS=20`，因此 38 个过滤候选中有 18 个未质检，manifest 里出现 `missing_qwen=18` 是预期行为。
+
 ## IRGPT 推理状态
 
 - 官方 WheatCao/ICCV2025-IRGPT 仓库暂无稳定推理脚本。

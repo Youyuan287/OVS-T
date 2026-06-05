@@ -67,6 +67,26 @@
 - 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data3_power_pilot_current`。
 - 后续：不要直接训练；优先改进电力细目标 proposal 或加入 box/point 辅助，再复跑 `pole/power line/insulator`。
 
+## 2026-06-06
+
+### 待提交 - add-data1-dedup-sam3-qwen-batch-pipeline
+
+- 目的：为 `data1` 35000 张红外城市场景图像建立可回溯的大规模伪标注生产链路，先去重再跑 SAM3 候选，最后只对有效候选做 Qwen3-VL 质检。
+- 主要改动：
+  - 新增 `scripts/10_dedupe_select_data1.py`：支持 SHA1 完全去重、64-bit `dHash/pHash-lite` 近重复去重、图像质量评分和 5000 张代表图选择。
+  - 新增 `scripts/11_filter_sam3_nonempty_candidates.py`：在 Qwen 面板生成前丢弃空 mask、异常大 mask，并按同图同类 mask IoU 去重。
+  - 新增 `scripts/12_run_data1_dedup_sam3_qwen.sh`：串联 data1 去重、prompt proposal、SAM3 text-only、候选过滤、Qwen QC 和 manifest 合并。
+  - 更新 `scripts/06_merge_filter_manifest.py`：新增 `--dedup_groups`，按去重组切分 train/val，避免近重复样本泄漏。
+- 默认输出：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data1_dedup5000_sam3_qwen_current`。
+- 验证：本地 `py_compile` 已通过；远程同步后需先跑 `MAX_SCAN=50 MAX_IMAGES=50 SAM3_MAX_ITEMS=20 QWEN_MAX_ITEMS=20` 小样本链路，再决定是否启动正式 5000 张。
+- 远程 smoke：`OUT=/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data1_dedup20_smoke_20260606 MAX_SCAN=50 MAX_IMAGES=20 SAM3_MAX_ITEMS=20 QWEN_MAX_ITEMS=20 bash scripts/12_run_data1_dedup_sam3_qwen.sh`。
+  - 去重：扫描 50 张，近重复/完全重复成员 19，形成 31 个去重组，选择 20 张。
+  - Prompt proposal：20 张图，240 条 fallback proposal。
+  - SAM3：处理前 20 条 proposal，80 个 candidate，45 个非空。
+  - 预过滤：保留 38 个非空有效候选，丢弃 35 个空 mask 和 7 个高 IoU 重复 mask。
+  - Qwen：真实 Qwen3-VL 质检 20/20 成功，0 fallback，0 parse failed。
+  - Manifest：保留 5 条 B 级样本，train=4，val=1；train/val 去重组无交叉。
+
 ## 2026-06-04
 
 ### 待提交 - dd-targeted-pilot-image-selection

@@ -43,6 +43,22 @@ def load_qwen(path: Path) -> Dict[str, Dict[str, Any]]:
     return {r["candidate_id"]: r for r in read_jsonl(path)}
 
 
+def load_dedup_group_map(path: Path | None) -> Dict[str, str]:
+    if path is None or not path.exists():
+        return {}
+    out = {}
+    for row in read_jsonl(path):
+        gid = str(row.get("group_id", ""))
+        if not gid:
+            continue
+        rep = row.get("representative")
+        if rep:
+            out[str(rep)] = gid
+        for member in row.get("members", []) or []:
+            out[str(member)] = gid
+    return out
+
+
 def mask_components(mask_path: Path) -> tuple[int, float]:
     if not mask_path.exists():
         return 0, 0.0
@@ -120,7 +136,7 @@ def quality_from_score(score: float) -> tuple[str, float, str]:
     return "C", 0.0, "drop"
 
 
-def build_rows(candidates_path: Path, qwen_path: Path) -> tuple[List[Dict[str, Any]], Counter]:
+def build_rows(candidates_path: Path, qwen_path: Path, dedup_group_map: Dict[str, str]) -> tuple[List[Dict[str, Any]], Counter]:
     qwen_by_id = load_qwen(qwen_path)
     rows = []
     reject = Counter()
@@ -146,6 +162,7 @@ def build_rows(candidates_path: Path, qwen_path: Path) -> tuple[List[Dict[str, A
         out = {
             "image": row["image"],
             "mask": row["mask"],
+            "dedup_group_id": dedup_group_map.get(row["image"], row["image"]),
             "scene_dir": row.get("scene_dir", qwen.get("scene_dir", "")),
             "scene_type": row.get("scene_type", qwen.get("scene_type", "")),
             "canonical_prompt": "power line" if row["canonical_prompt"] == "wire" else row["canonical_prompt"],
@@ -198,6 +215,17 @@ def split_by_image(rows: List[Dict[str, Any]], val_ratio: float, seed: int) -> t
     return train, val
 
 
+def split_by_dedup_group(rows: List[Dict[str, Any]], val_ratio: float, seed: int) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    groups = sorted({r.get("dedup_group_id") or r["image"] for r in rows})
+    random.Random(seed).shuffle(groups)
+    n_val = max(1, int(len(groups) * val_ratio)) if len(groups) >= 2 else 0
+    val_groups = set(groups[:n_val])
+    train, val = [], []
+    for r in rows:
+        (val if (r.get("dedup_group_id") or r["image"]) in val_groups else train).append(r)
+    return train, val
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidates", required=True)
@@ -207,12 +235,14 @@ def main() -> int:
     parser.add_argument("--target_total", type=int, default=10000)
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=33)
+    parser.add_argument("--dedup_groups", default="", help="Optional dedup_groups.jsonl; prevents near-duplicate group leakage across train/val.")
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
-    rows, reject = build_rows(Path(args.candidates), Path(args.qwen))
+    dedup_group_map = load_dedup_group_map(Path(args.dedup_groups)) if args.dedup_groups else {}
+    rows, reject = build_rows(Path(args.candidates), Path(args.qwen), dedup_group_map)
     rows = balanced(rows, args.max_per_class, args.target_total)
-    train, val = split_by_image(rows, args.val_ratio, args.seed)
+    train, val = split_by_dedup_group(rows, args.val_ratio, args.seed) if dedup_group_map else split_by_image(rows, args.val_ratio, args.seed)
     write_jsonl(out_dir / "train_hq.jsonl", train)
     write_jsonl(out_dir / "val_hq.jsonl", val)
 
@@ -225,6 +255,9 @@ def main() -> int:
         "classes": dict(counter),
         "qualities": dict(qcounter),
         "reject_reasons": dict(reject),
+        "dedup_groups_used": bool(dedup_group_map),
+        "train_dedup_groups": len({r.get("dedup_group_id", r["image"]) for r in train}),
+        "val_dedup_groups": len({r.get("dedup_group_id", r["image"]) for r in val}),
         "train_jsonl": str(out_dir / "train_hq.jsonl"),
         "val_jsonl": str(out_dir / "val_hq.jsonl"),
     }
