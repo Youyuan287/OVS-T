@@ -9,6 +9,27 @@
 - 线上提交版本还必须同步更新 `experiments/submission_log.md`，并按 `submit-YYYYMMDD-S1` 到 `submit-YYYYMMDD-S4` 打 tag。
 - 若只是文档修正，也需要记录原因，避免后续误解技术路线。
 
+## 2026-06-05
+
+### 待提交 - add-data3-power-qwen-pilot
+
+- 目的：实现并验证 data3 电力场景小数据集 pilot，按一级文件夹名记录场景，并接入真实 Qwen3-VL-8B 质检。
+- 主要改动：
+  - 新增 `scripts/09_select_scene_pilot_images.py`，支持按 `scene_dir` 选择图像，输出 `image_list.txt`、`scene_manifest.jsonl` 和 `summary.json`。
+  - 更新 `scripts/02_build_prompt_proposals.py`，为 fallback proposal 写入 `scene_dir` 和 `default_scene_type`。
+  - 更新 `scripts/03_run_sam3_multi_prompt.py`、`04_build_qwen_qc_panels.py`、`05_run_qwen8b_qc.py`、`06_merge_filter_manifest.py`，贯穿 `scene_dir/scene_type` 字段。
+  - `scripts/05_run_qwen8b_qc.py` 新增 `--local_qwen_model`，可一次加载本地 Qwen3-VL 模型批量质检。
+  - 新增 `scripts/qwen3_vl_qc_worker.py`，保留单 panel Qwen worker 入口。
+  - 修复小样本 manifest split：当保留图像少于 2 张时不强制切出 val。
+- 验证：
+  - `py_compile` 通过。
+  - data3 实际图像数为 29，无 data2 目录；本轮覆盖全部 data3 图像。
+  - SAM3 正式 pilot：261 条 proposal，1044 个 candidates，108 个非空。
+  - Qwen3-VL 正式 QC：1044 个 task，1043 条成功输出，0 条 rule fallback。
+  - Manifest：`kept_total=1`，`train_hq=1`，`val_hq=0`；电力类暂未进入高置信 manifest。
+- 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data3_power_pilot_current`。
+- 后续：不要直接训练；优先改进电力细目标 proposal 或加入 box/point 辅助，再复跑 `pole/power line/insulator`。
+
 ## 2026-06-04
 
 ### 待提交 - dd-targeted-pilot-image-selection

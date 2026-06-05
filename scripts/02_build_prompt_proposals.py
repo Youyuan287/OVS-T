@@ -43,6 +43,14 @@ def load_image_list(path: Path) -> List[Path]:
     return images
 
 
+def scene_dir_for(image: Path, image_root: Path) -> str:
+    try:
+        rel = image.resolve().relative_to(image_root.resolve())
+        return rel.parts[0] if rel.parts else image.parent.name
+    except Exception:
+        return image.parent.name
+
+
 def filter_classes(classes: List[Dict[str, Any]], include_classes: str) -> List[Dict[str, Any]]:
     if not include_classes:
         return classes
@@ -144,6 +152,7 @@ def main() -> int:
     parser.add_argument("--summary", default="")
     parser.add_argument("--image_list", default="", help="Optional newline-separated absolute image paths.")
     parser.add_argument("--include_classes", default="", help="Comma-separated canonical classes to emit.")
+    parser.add_argument("--default_scene_type", default="", help="Scene type used when no external proposal scene is available.")
     parser.add_argument("--max_images", type=int, default=500)
     parser.add_argument("--seed", type=int, default=33)
     parser.add_argument("--fallback_classes", type=int, default=12)
@@ -182,12 +191,16 @@ def main() -> int:
                 if raw_json is None:
                     stats["empty_or_error_raw"] += 1
             scene_type, candidates = normalize_candidates(raw_json, classes, args.fallback_classes)
+            image_scene_dir = scene_dir_for(image, Path(args.image_root))
+            if scene_type == "unknown" and args.default_scene_type:
+                scene_type = args.default_scene_type
             if raw_json is None:
                 stats["fallback_images"] += 1
             for cand in candidates:
                 row = {
                     "image": str(image),
                     "image_index": idx,
+                    "scene_dir": image_scene_dir,
                     "scene_type": scene_type,
                     "canonical": cand["canonical"],
                     "prompt": cand["prompt"],

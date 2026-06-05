@@ -78,3 +78,71 @@
 - 输出图片列表：/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_targeted_sampling/targeted_images.txt。
 
 下一步使用该 image list 生成 pole/power line/insulator/person/vehicle/car 专项 prompt proposal，并用更低候选阈值跑 SAM3 text-only pilot。
+
+## 2026-06-05 data3 电力场景 SAM3 + Qwen3-VL Pilot
+
+- 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data3_power_pilot_current`
+- 场景目录：`data3`
+- 场景标注：`power/electric_scene`
+- 图像来源：`/home/Groups/group2/Working/TJY/sam3_ir_test/data/ir_images/data3`
+- 图像数：`29`，覆盖 data3 全部图像。
+- 采样：旧伪标签命中优先，命中图像 `2` 张，随机补齐 `27` 张。
+- SAM3 环境：`/home/Groups/group2/Working/seg/miniconda3/envs/esam3_312/bin/python`
+- Qwen 环境：`/home/Groups/group2/Working/seg/miniconda3/envs/thgs/bin/python`
+- Qwen 模型：`/home/Groups/group2/.cache/modelscope/hub/models/Qwen/Qwen3-VL-8B-Instruct`
+- SAM3 权重：`submit_epoch4_best/model/sam3.pt`
+- SAM3 设置：`threshold=0.35`，`resolution=768`，`modes=text_only`，`prompts_per_class=4`
+
+| 阶段 | 指标 | 结果 | 结论 |
+|---|---:|---:|---|
+| Scene sampling | data3 图像数 | 29 | 第一轮电力场景全覆盖。 |
+| Scene sampling | 旧伪标签命中图像 | 2 | data3 中旧伪标签可用种子很少。 |
+| Prompt proposal | 图像数 | 29 | 全部来自 `data3`。 |
+| Prompt proposal | candidate 数 | 261 | 9 类 fallback proposal。 |
+| SAM3 candidates | 候选 mask 数 | 1044 | 每条 proposal 约 4 个 text prompt。 |
+| SAM3 candidates | 非空 mask 数 | 108 | 非空率约 10.34%。 |
+| Qwen QC | task 数 | 1044 | 全量 panel 质检。 |
+| Qwen QC | 成功输出 | 1043 | 真实 Qwen 成功，无 rule fallback。 |
+| Qwen QC | fallback 数 | 0 | 已使用本地 Qwen3-VL-8B。 |
+| Manifest | kept_total | 1 | 当前硬过滤后仅保留 1 条。 |
+| Manifest | train_hq / val_hq | 1 / 0 | 小样本拆分已避免单样本落入 val。 |
+| Manifest | 电力类样本数 | 0 | `pole/power line/insulator` 暂无高置信入选。 |
+
+### SAM3 非空统计
+
+| 类别 | proposal 数 | candidate 数 | 非空数 | 非空平均面积比例 |
+|---|---:|---:|---:|---:|
+| building | 29 | 116 | 16 | 0.206927 |
+| car | 29 | 116 | 13 | 0.074255 |
+| insulator | 29 | 116 | 0 | 0 |
+| person | 29 | 116 | 8 | 0.108903 |
+| pole | 29 | 116 | 19 | 0.041129 |
+| power line | 58 | 232 | 2 | 0.034711 |
+| road | 29 | 116 | 41 | 0.274438 |
+| vehicle | 29 | 116 | 9 | 0.087040 |
+
+### Qwen3-VL 决策统计
+
+| 类别 | QC 数 | accept | review | drop | 平均 semantic_match |
+|---|---:|---:|---:|---:|---:|
+| building | 116 | 22 | 7 | 87 | 0.2422 |
+| car | 116 | 0 | 0 | 116 | 0.0000 |
+| insulator | 116 | 104 | 8 | 4 | 0.9552 |
+| person | 116 | 0 | 1 | 115 | 0.0069 |
+| pole | 115 | 49 | 29 | 37 | 0.6365 |
+| power line | 232 | 64 | 66 | 102 | 0.5241 |
+| road | 116 | 0 | 0 | 116 | 0.0000 |
+| vehicle | 116 | 0 | 0 | 116 | 0.0000 |
+
+### Overlay 示例
+
+- `power line`: `/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data3_power_pilot_current/sam3_overlays/power line/20230817162952_inf_2480_2888fb397c61.jpg`
+- `pole`: `/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/dataset_v2_data3_power_pilot_current/sam3_overlays/pole/20230817163629_inf_2820_185434f56c2c.jpg`
+- `insulator`: 无非空 SAM3 mask 示例。
+
+### 结论
+
+- data3 电力场景小数据集链路已经跑通：场景采样 -> prompt proposal -> SAM3 mask -> Qwen3-VL panel QC -> manifest。
+- 当前瓶颈主要是 SAM3 text-only 对电力细目标候选不足：`insulator` 全空，`power line` 仅 2 个非空，`pole` 有 19 个非空但未通过最终高置信过滤。
+- Qwen3-VL 对电力类别语义并不完全失败，`insulator/pole/power line` 有较多 accept/review；但空 mask 和低最终融合分阻止其进入 `train_hq`。
+- 下一步不建议直接训练。建议优先尝试电力类专用 proposal：更强图像定位提示、box/point proposal、降低 SAM3 候选阈值消融，或从 data3 之外扩展更多电力场景样本。

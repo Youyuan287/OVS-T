@@ -117,6 +117,8 @@ def main() -> int:
                 "candidate_id": row["candidate_id"],
                 "panel": str(panel_path),
                 "target_class": row["canonical_prompt"],
+                "scene_dir": row.get("scene_dir", Path(row["image"]).parent.name),
+                "scene_type": row.get("scene_type", ""),
                 "raw_prompt": row["raw_prompt"],
                 "sam3_score": row.get("sam3_score", 0.0),
                 "area_ratio": row.get("area_ratio", 0.0),

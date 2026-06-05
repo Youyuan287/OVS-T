@@ -146,6 +146,8 @@ def build_rows(candidates_path: Path, qwen_path: Path) -> tuple[List[Dict[str, A
         out = {
             "image": row["image"],
             "mask": row["mask"],
+            "scene_dir": row.get("scene_dir", qwen.get("scene_dir", "")),
+            "scene_type": row.get("scene_type", qwen.get("scene_type", "")),
             "canonical_prompt": "power line" if row["canonical_prompt"] == "wire" else row["canonical_prompt"],
             "raw_prompt": row["raw_prompt"],
             "source_mode": row["source_mode"],
@@ -188,7 +190,7 @@ def balanced(rows: List[Dict[str, Any]], max_per_class: int, target_total: int) 
 def split_by_image(rows: List[Dict[str, Any]], val_ratio: float, seed: int) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     images = sorted({r["image"] for r in rows})
     random.Random(seed).shuffle(images)
-    n_val = max(1, int(len(images) * val_ratio)) if images else 0
+    n_val = max(1, int(len(images) * val_ratio)) if len(images) >= 2 else 0
     val_images = set(images[:n_val])
     train, val = [], []
     for r in rows:

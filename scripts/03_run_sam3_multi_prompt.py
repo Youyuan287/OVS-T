@@ -297,6 +297,8 @@ def main() -> int:
                     row = {
                         "candidate_id": cid,
                         "image": str(image_path),
+                        "scene_dir": prop.get("scene_dir", image_path.parent.name),
+                        "scene_type": prop.get("scene_type", ""),
                         "canonical_prompt": canonical,
                         "raw_prompt": prompt,
                         "source_mode": mode,
