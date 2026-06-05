@@ -11,6 +11,24 @@
 
 ## 2026-06-05
 
+### 待提交 - add-interactive-sam3-qwen-web-console
+
+- 目的：减少每次必须跑完整批处理后再翻 JSONL/目录的诊断成本，提供本地网页交互查看 SAM3 分割和 Qwen3-VL 质检结果。
+- 主要改动：
+  - 新增 `scripts/sam3_infer_server.py`，在 `esam3_312` 环境常驻加载 SAM3，提供 `GET /health` 与 `POST /segment`。
+  - 新增 `scripts/qwen_qc_server.py`，在 `thgs` 环境常驻加载本地 Qwen3-VL-8B，提供 `GET /health` 与 `POST /qc`。
+  - 本地新增 `tools/sam3_qwen_web/app.py`，使用 Streamlit 提供上传图片、远端路径、批量路径、prompt 输入、SAM3/Qwen 结果展示和 CSV/JSONL 下载。
+  - 本地新增 `tools/sam3_qwen_web/README.md`，记录启动方式、SSH tunnel 和输出目录。
+- 验证：
+  - 本地 `python -m py_compile tools/sam3_qwen_web/app.py` 通过。
+  - 远端 `py_compile` 通过。
+  - 远端服务已启动：SAM3 `127.0.0.1:18081`，Qwen `127.0.0.1:18082`。
+  - 本地 SSH tunnel health check 通过：`http://127.0.0.1:18081/health` 与 `http://127.0.0.1:18082/health`。
+  - 单图 smoke：`data1/00044.jpg` + `road,car,building` 成功返回 3 个 SAM3 candidate，Qwen 对 road candidate 返回完整指标。
+  - 批量 smoke：3 张 data1 图、2 个 prompt 共返回 6 个 SAM3 candidate。
+- 输出目录：`/home/Groups/group2/Working/TJY/sam3_ir_test/outputs/interactive_web_runs/`。
+- 后续：如果交互频率高，可进一步加入历史任务列表、阈值对比和人工 accept/reject 标注。
+
 ### 待提交 - record-data1-random10-pilot
 
 - 目的：对比 data3 电力场景表现，随机抽取 data1 城市场景 10 张图复跑 SAM3 + Qwen3-VL 小样本实验。
